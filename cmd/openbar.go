@@ -115,14 +115,24 @@ func module(args []string) openbar.ModuleFunc {
 
 		// If the command fails, include full error in message.
 		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("%w: %s", err, stderr.String())
+			return "", fmt.Errorf("%w: %s", err, line(stderr))
 		}
 
 		// Pad output with spaces for better readability.
-		out := fmt.Sprintf(" %s ", strings.TrimSpace(stdout.String()))
+		out := fmt.Sprintf(" %s ", strings.TrimSpace(line(stdout)))
 
 		return out, nil
 	}
+}
+
+// Read the first line of text until carriage return or EOF.
+// Panic if any other error occurs.
+func line(b *bytes.Buffer) string {
+	res, err := b.ReadString(0x0A)
+	if err != nil && !errors.Is(err, io.EOF) {
+		panic(err)
+	}
+	return res
 }
 
 // Exit on error.
