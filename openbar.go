@@ -199,3 +199,8 @@ func WithModule(module Module, interval time.Duration) Option {
 		cfg.cells = append(cfg.cells, cell{module, interval})
 	}
 }
+
+// WithModuleFunc configures a module from an anonymous function.
+func WithModuleFunc(f func() (string, error), interval time.Duration) Option {
+	return WithModule(ModuleFunc(f), interval)
+}

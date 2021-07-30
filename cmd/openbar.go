@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,28 +11,40 @@ import (
 	"io"
 	"log/syslog"
 	"openbar"
+	"openbar/modules/command"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		must(errors.New("usage: openbar <path>"))
+	if err := run(os.Args...); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
 
-	stderr, err := syslog.New(syslog.LOG_ERR, os.Args[0])
-	must(err)
-
-	opts, err := parse(os.Args[1])
-	must(err)
-
+// Delegate work here because os.Exit would prevent deferred calls to be
+// executed.
+func run(args ...string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if len(args) < 2 {
+		return errors.New("usage: openbar <path>")
+	}
+
+	stderr, err := syslog.New(syslog.LOG_ERR, args[0])
+	if err != nil {
+		return err
+	}
+
+	opts, err := parse(args[1])
+	if err != nil {
+		return err
+	}
 
 	sigc := make(chan os.Signal, 1)
 
@@ -54,7 +65,7 @@ func main() {
 		openbar.WithError(stderr),
 	)
 
-	must(openbar.Run(ctx, opts...))
+	return openbar.Run(ctx, opts...)
 }
 
 // Parse a JSON configuration file with each entry of the array being an object
@@ -64,7 +75,6 @@ func parse(path string) ([]openbar.Option, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer fd.Close()
 
 	data, err := io.ReadAll(fd)
@@ -84,61 +94,16 @@ func parse(path string) ([]openbar.Option, error) {
 
 	res := make([]openbar.Option, len(entries))
 	for i, e := range entries {
-		opt, err := option(e.Command, e.Interval)
+		duration, err := time.ParseDuration(e.Interval)
 		if err != nil {
 			return nil, err
 		}
-		res[i] = opt
+
+		res[i] = openbar.WithModuleFunc(
+			command.New(e.Command...),
+			duration,
+		)
 	}
 
 	return res, nil
-}
-
-// Create an option from an entry of the configuration file.
-func option(cmd []string, interval string) (openbar.Option, error) {
-	i, err := time.ParseDuration(interval)
-	if err != nil {
-		return nil, err
-	}
-	return openbar.WithModule(module(cmd), i), nil
-}
-
-// Create a bar module executing the given shell command.
-func module(args []string) openbar.ModuleFunc {
-	return func() (string, error) {
-		//nolint:gosec
-		cmd := exec.Command(args[0], args[1:]...)
-
-		// Buffer standard output and standard error to allow later processing.
-		stdout, stderr := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
-		cmd.Stdout, cmd.Stderr = stdout, stderr
-
-		// If the command fails, include full error in message.
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("%w: %s", err, line(stderr))
-		}
-
-		// Pad output with spaces for better readability.
-		out := fmt.Sprintf(" %s ", strings.TrimSpace(line(stdout)))
-
-		return out, nil
-	}
-}
-
-// Read the first line of text until carriage return or EOF.
-// Panic if any other error occurs.
-func line(b *bytes.Buffer) string {
-	res, err := b.ReadString(0x0A)
-	if err != nil && !errors.Is(err, io.EOF) {
-		panic(err)
-	}
-	return res
-}
-
-// Exit on error.
-func must(err error) {
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }
