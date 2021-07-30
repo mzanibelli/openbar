@@ -5,10 +5,8 @@ package openbar
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -81,7 +79,7 @@ func Run(ctx context.Context, opts ...Option) error {
 	// output inside the infinite JSON array. No error handling here because we
 	// don't want to prevent other modules from working.
 	for res := range scheduler.out {
-		b[res.idx].FullText = fmt.Sprintf(" %s ", strings.TrimSpace(res.out))
+		b[res.idx].FullText = res.out
 		debug(res.err)
 		debug(print(cfg.out, b, 0x2C))
 	}

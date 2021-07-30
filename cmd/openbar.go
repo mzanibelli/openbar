@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -107,12 +108,20 @@ func module(args []string) openbar.ModuleFunc {
 	return func() (string, error) {
 		//nolint:gosec
 		cmd := exec.Command(args[0], args[1:]...)
+
+		// Buffer standard output and standard error to allow later processing.
 		stdout, stderr := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
 		cmd.Stdout, cmd.Stderr = stdout, stderr
+
+		// If the command fails, include full error in message.
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("%w: %s", err, stderr.String())
 		}
-		return stdout.String(), nil
+
+		// Pad output with spaces for better readability.
+		out := fmt.Sprintf(" %s ", strings.TrimSpace(stdout.String()))
+
+		return out, nil
 	}
 }
 
