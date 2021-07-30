@@ -80,9 +80,9 @@ func Run(ctx context.Context, opts ...Option) error {
 	// Each time a screen update is required, mutate the bar body and print the new
 	// output inside the infinite JSON array. No error handling here because we
 	// don't want to prevent other modules from working.
-	for j := range scheduler.out {
-		b[j.idx].FullText = fmt.Sprintf(" %s ", strings.TrimSpace(j.out))
-		debug(j.err)
+	for res := range scheduler.out {
+		b[res.idx].FullText = fmt.Sprintf(" %s ", strings.TrimSpace(res.out))
+		debug(res.err)
 		debug(print(cfg.out, b, 0x2C))
 	}
 

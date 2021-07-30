@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -102,14 +103,16 @@ func option(cmd []string, interval string) (openbar.Option, error) {
 }
 
 // Create a bar module executing the given shell command.
-func module(cmd []string) openbar.ModuleFunc {
+func module(args []string) openbar.ModuleFunc {
 	return func() (string, error) {
 		//nolint:gosec
-		out, err := exec.Command(cmd[0], cmd[1:]...).Output()
-		if err != nil {
-			return "", err
+		cmd := exec.Command(args[0], args[1:]...)
+		stdout, stderr := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("%w: %s", err, stderr.String())
 		}
-		return string(out), nil
+		return stdout.String(), nil
 	}
 }
 
