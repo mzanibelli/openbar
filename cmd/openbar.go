@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/syslog"
 	"openbar"
 	"os"
 	"os/exec"
@@ -22,6 +23,9 @@ func main() {
 	if len(os.Args) < 2 {
 		must(errors.New("usage: openbar <path>"))
 	}
+
+	stderr, err := syslog.New(syslog.LOG_ERR, os.Args[0])
+	must(err)
 
 	opts, err := parse(os.Args[1])
 	must(err)
@@ -45,7 +49,7 @@ func main() {
 	opts = append(
 		opts,
 		openbar.WithOutput(os.Stdout),
-		openbar.WithError(nil),
+		openbar.WithError(stderr),
 	)
 
 	must(openbar.Run(ctx, opts...))
