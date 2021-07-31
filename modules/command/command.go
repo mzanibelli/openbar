@@ -1,3 +1,4 @@
+// Package command is an OpenBar module that runs shell commands.
 package command
 
 import (
