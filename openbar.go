@@ -126,6 +126,7 @@ func (s scheduler) update(ctx context.Context, i int, m Module, d time.Duration)
 	s.do(i, m)
 
 	tck := time.NewTicker(d)
+	defer tck.Stop()
 
 	for {
 		select {
