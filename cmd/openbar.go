@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/syslog"
@@ -21,7 +20,7 @@ import (
 
 func main() {
 	if err := run(os.Args...); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "%s: %v\n", os.Args[0], err)
 		os.Exit(1)
 	}
 }
@@ -33,7 +32,7 @@ func run(args ...string) error {
 	defer cancel()
 
 	if len(args) < 2 {
-		return errors.New("usage: openbar <path>")
+		return fmt.Errorf("usage: %s PATH", args[0])
 	}
 
 	stderr, err := syslog.New(syslog.LOG_ERR, args[0])
