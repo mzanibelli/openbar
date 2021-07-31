@@ -30,7 +30,7 @@ func do(args ...string) (string, error) {
 		return "", verbose(err, line(stderr))
 	}
 
-	return pad(line(stdout)), nil
+	return strings.TrimSpace(line(stdout)), nil
 }
 
 // Read the first line of text until carriage return or EOF.
@@ -51,16 +51,5 @@ func verbose(err error, info string) error {
 		return err
 	default:
 		return fmt.Errorf("%w: %s", err, clean)
-	}
-}
-
-// Pad string with leading and trailing spaces for readability.
-func pad(v string) string {
-	clean := strings.TrimSpace(v)
-	switch clean {
-	case "":
-		return ""
-	default:
-		return fmt.Sprintf(" %s ", clean)
 	}
 }

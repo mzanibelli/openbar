@@ -15,7 +15,7 @@ func TestCommand(t *testing.T) {
 	}{
 		{
 			cmd: []string{"echo", "foo"},
-			out: " foo ",
+			out: "foo",
 			err: nil,
 		},
 		{
@@ -35,7 +35,7 @@ func TestCommand(t *testing.T) {
 		},
 		{
 			cmd: []string{"sh", "-c", "echo foo; echo bar;"},
-			out: " foo ",
+			out: "foo",
 			err: nil,
 		},
 	}
