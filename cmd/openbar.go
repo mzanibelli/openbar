@@ -62,7 +62,7 @@ func run(args ...string) error {
 		opts,
 		openbar.WithOutput(os.Stdout),
 		openbar.WithError(stderr),
-		openbar.WithJitter(5000),
+		openbar.WithJitter(2000),
 	)
 
 	return openbar.Run(ctx, opts...)
