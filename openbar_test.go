@@ -34,10 +34,13 @@ func TestOpenBar(t *testing.T) {
 			openbar.WithOutput(stdout),
 			openbar.WithError(stderr),
 			openbar.WithModule(module, 10*time.Hour),
+			openbar.WithJitter(0),
 		); err != nil {
 			t.Error(err)
 		}
 	}()
+
+	time.Sleep(1 * time.Millisecond)
 
 	cancel()
 

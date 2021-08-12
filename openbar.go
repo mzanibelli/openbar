@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"sync"
@@ -72,7 +73,7 @@ func Run(ctx context.Context, opts ...Option) error {
 	// Start one worker per module. This allows us to have variable refresh rate
 	// for each and every one of them.
 	for i, c := range cfg.cells {
-		go scheduler.update(ctx, i, c.module, c.interval)
+		go scheduler.update(ctx, i, c.module, c.interval, jitter(cfg.jitter))
 	}
 
 	b := make([]Block, n)
@@ -120,34 +121,57 @@ func bootstrap(size int) scheduler {
 }
 
 const (
-	sigRtMin = 0x22 // Minimum reload signal value.
-	sigRtMax = 0x40 // Maximum reload signal value.
+	broadcast = syscall.SIGUSR1 // Reload all modules.
+	sigRtMin  = 0x22            // Minimum reload signal value for a single module.
+	sigRtMax  = 0x40            // Maximum reload signal value for a single module.
 )
 
 // Start a goroutine that will write result of a module at regular intervals. A
 // first processing is performed on first call of this function to allow initial
-// print of the bar. Modules also reload on SIGUSR1 or a custom signal related to their offset.
-func (s scheduler) update(ctx context.Context, i int, m Module, d time.Duration) {
+// print of the bar. Modules also reload on SIGUSR1 or a custom signal related to
+// their offset. First processing is delayed by a given jitter value.
+func (s scheduler) update(ctx context.Context, i int, m Module, d, j time.Duration) {
 	defer s.wg.Done()
 
-	s.do(i, m)
+	t1 := time.NewTimer(j)
+	defer t1.Stop()
 
-	tck := time.NewTicker(d)
-	defer tck.Stop()
+	// Initialize the ticker with a higher interval than the jitter timer to allow
+	// first paint to only be triggered by the timer. Then, receiving on the timer
+	// channel will reset the ticker's duration to its normal value.
+	t2 := time.NewTicker(j + 1)
+	defer t2.Stop()
 
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, syscall.SIGUSR1, syscall.Signal(sigRtMin+((i+1)%sigRtMax)))
+	sigc, id := make(chan os.Signal, 1), sigRtMin+((i+1)%sigRtMax)
+	signal.Notify(sigc, broadcast, syscall.Signal(id))
 	defer close(sigc)
+	defer signal.Stop(sigc)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-tck.C:
-			s.do(i, m)
-		case <-sigc:
-			s.do(i, m)
+
+		// A normal tick occurs.
+		case <-t2.C:
+
+		// When the jitter timer finishes, we reset the ticker so the jitter offset
+		// affects future updates. This avoids having modules with the same interval
+		// updating exactly at the same time.
+		case <-t1.C:
+			t2.Reset(d)
+
+		// When activating a manual refresh for all modules, we spread execution with
+		// jitter and cancel upcoming ticks by resetting the timer. This avoids performing
+		// the update twice in a row.
+		case sig := <-sigc:
+			if sig == broadcast {
+				time.Sleep(j)
+				t2.Reset(d)
+			}
 		}
+
+		s.do(i, m)
 	}
 }
 
@@ -155,6 +179,20 @@ func (s scheduler) update(ctx context.Context, i int, m Module, d time.Duration)
 func (s scheduler) do(idx int, m Module) {
 	out, err := m.FullText()
 	s.out <- result{idx, out, err}
+}
+
+var initRand sync.Once
+
+// Return a random duration lesser than the given maximum.
+func jitter(max int) time.Duration {
+	if max == 0 {
+		return 0
+	}
+	initRand.Do(func() {
+		rand.Seed(time.Now().UnixNano())
+	})
+	//nolint:gosec
+	return time.Duration(rand.Intn(max)) * time.Millisecond
 }
 
 // Print a log entry if there is an error.
@@ -179,8 +217,9 @@ func print(w io.Writer, v interface{}, glue ...byte) error {
 
 // This struct holds the global configuration.
 type config struct {
-	out   io.Writer
-	cells []cell
+	out    io.Writer
+	jitter int
+	cells  []cell
 }
 
 // A cell is a module and the interval at which it must be updated.
@@ -217,4 +256,12 @@ func WithModule(module Module, interval time.Duration) Option {
 // WithModuleFunc configures a module from an anonymous function.
 func WithModuleFunc(f func() (string, error), interval time.Duration) Option {
 	return WithModule(ModuleFunc(f), interval)
+}
+
+// WithJitter configures the maximum time (in ms) over which modules will delay
+// their updates.
+func WithJitter(jitter int) Option {
+	return func(cfg *config) {
+		cfg.jitter = jitter
+	}
 }
