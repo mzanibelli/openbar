@@ -1,4 +1,4 @@
-all: lint test install reload
+all: lint test install
 
 lint:
 	golangci-lint run ./...

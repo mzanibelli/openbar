@@ -10,6 +10,11 @@ Run `openbar <path-to-configuration-file>`.
 
 Use this command as your Sway `status_command`.
 
+You can reload each module manually by emitting a signal equal to `SIGRTMIN+index`, where `index` is the position of the module in the order of declaration.
+If you have so many modules that `SIGRTMAX` is reached, the automatically assigned signal cycles back to `SIGRTMIN` for the next module.
+
+Additionally, all modules will reload upon receiving `SIGUSR1`.
+
 ## Configuration
 
 This is an example configuration file.

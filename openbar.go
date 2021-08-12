@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
 	"syscall"
 	"time"
@@ -117,9 +119,14 @@ func bootstrap(size int) scheduler {
 	return scheduler{wg, out}
 }
 
+const (
+	sigRtMin = 0x22 // Minimum reload signal value.
+	sigRtMax = 0x40 // Maximum reload signal value.
+)
+
 // Start a goroutine that will write result of a module at regular intervals. A
 // first processing is performed on first call of this function to allow initial
-// print of the bar.
+// print of the bar. Modules also reload on SIGUSR1 or a custom signal related to their offset.
 func (s scheduler) update(ctx context.Context, i int, m Module, d time.Duration) {
 	defer s.wg.Done()
 
@@ -128,11 +135,17 @@ func (s scheduler) update(ctx context.Context, i int, m Module, d time.Duration)
 	tck := time.NewTicker(d)
 	defer tck.Stop()
 
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGUSR1, syscall.Signal(sigRtMin+((i+1)%sigRtMax)))
+	defer close(sigc)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-tck.C:
+			s.do(i, m)
+		case <-sigc:
 			s.do(i, m)
 		}
 	}
