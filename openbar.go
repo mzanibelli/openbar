@@ -126,12 +126,15 @@ const (
 	sigRtMax  = 0x40            // Maximum reload signal value for a single module.
 )
 
-// Start a goroutine that will write result of a module at regular intervals. A
-// first processing is performed on first call of this function to allow initial
-// print of the bar. Modules also reload on SIGUSR1 or a custom signal related to
-// their offset. First processing is delayed by a given jitter value.
+// The function responsible for periodically updating cells. It performs an
+// initial execution delayed with a random jitter to spread the load upon booting
+// Sway. Then, modules are updated according to their respective intervals or when
+// a signal is received. A SIGUSR1 signal will trigger a refresh for all modules
+// whereas each module can be individually reloaded with SIGRTMIN+i.
 func (s scheduler) update(ctx context.Context, i int, m Module, d, j time.Duration) {
 	defer s.wg.Done()
+
+	s.wait(i)
 
 	t1 := time.NewTimer(j)
 	defer t1.Stop()
@@ -155,20 +158,28 @@ func (s scheduler) update(ctx context.Context, i int, m Module, d, j time.Durati
 		// A normal tick occurs.
 		case <-t2.C:
 
-		// When the jitter timer finishes, we reset the ticker so the jitter offset
+		// When the jitter timer finishes, reset the ticker so the jitter offset
 		// affects future updates. This avoids having modules with the same interval
-		// updating exactly at the same time.
+		// updating exactly at the same time (and also sets the correct ticker interval
+		// which was temporarily overridden at initialization phase).
 		case <-t1.C:
 			t2.Reset(d)
 
-		// When activating a manual refresh for all modules, we spread execution with
+		// When activating a manual refresh for all modules, spread execution with
 		// jitter and cancel upcoming ticks by resetting the timer. This avoids performing
-		// the update twice in a row.
+		// the update twice in a row. Since jitter can span a few seconds, display a text
+		// showing to the user the module is reloading. For single module reloads,
+		// simply execute as fast as possible to minimize the time to visual feedback
+		// as this feature is often used to match another action that happened in the
+		// system (ie. user changed volume, we want to update the volume cell without any
+		// other visual artifact, we don't care about doing this twice).
 		case sig := <-sigc:
-			if sig == broadcast {
-				time.Sleep(j)
-				t2.Reset(d)
+			if sig != broadcast {
+				break
 			}
+			s.wait(i)
+			time.Sleep(j)
+			t2.Reset(d)
 		}
 
 		s.do(i, m)
@@ -179,6 +190,13 @@ func (s scheduler) update(ctx context.Context, i int, m Module, d, j time.Durati
 func (s scheduler) do(idx int, m Module) {
 	out, err := m.FullText()
 	s.out <- result{idx, out, err}
+}
+
+const placeholder = "..."
+
+// Display a placeholder to inform user refresh instruction has been received.
+func (s scheduler) wait(idx int) {
+	s.out <- result{idx, placeholder, nil}
 }
 
 var initRand sync.Once
