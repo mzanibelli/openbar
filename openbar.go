@@ -60,7 +60,7 @@ func Run(ctx context.Context, opts ...Option) error {
 
 	// If we can't print headers, exit early to avoid having already started
 	// multiple goroutines that will leak.
-	if err := print(cfg.out, defaultHeader, 0x0A, 0x5B); err != nil {
+	if err := write(cfg.out, defaultHeader, 0x0A, 0x5B); err != nil {
 		return err
 	}
 
@@ -84,7 +84,7 @@ func Run(ctx context.Context, opts ...Option) error {
 	for res := range scheduler.out {
 		b[res.idx].FullText = res.out
 		debug(res.err)
-		debug(print(cfg.out, b, 0x2C))
+		debug(write(cfg.out, b, 0x2C))
 	}
 
 	return nil
@@ -222,7 +222,7 @@ func debug(err error) {
 
 // Marshal the given value to JSON, concatenate additional trailing bytes and
 // write them to the writer.
-func print(w io.Writer, v interface{}, glue ...byte) error {
+func write(w io.Writer, v interface{}, glue ...byte) error {
 	json, err := json.Marshal(v)
 	if err != nil {
 		return err

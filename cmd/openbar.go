@@ -75,6 +75,7 @@ func parse(path string) ([]openbar.Option, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	defer fd.Close()
 
 	data, err := io.ReadAll(fd)
